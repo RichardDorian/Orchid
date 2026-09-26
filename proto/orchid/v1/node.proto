@@ -1,0 +1,128 @@
+syntax = "proto3";
+
+package orchid.v1;
+
+import "google/protobuf/timestamp.proto";
+import "orchid/v1/common.proto";
+
+// Public node API. Nodes are created by Keiki registrations (see NodeAgentService).
+//
+// Authorization (mTLS mode):
+// - users: every call
+// - ikebana: GetNode, ListNodes, WatchNodes
+service NodeService {
+  rpc GetNode(GetNodeRequest) returns (Node);
+
+  rpc ListNodes(ListNodesRequest) returns (ListNodesResponse);
+
+  rpc WatchNodes(WatchNodesRequest) returns (stream NodeEvent);
+
+  // Cordon / uncordon / drain.
+  rpc UpdateNodeSpec(UpdateNodeSpecRequest) returns (Node);
+
+  // Revokes the node lease, its pods are rescheduled like for a lost node.
+  // If the Keiki agent is still running, it registers the node again.
+  rpc DeleteNode(DeleteNodeRequest) returns (DeleteNodeResponse);
+}
+
+message Node {
+  // Read only.
+  string name = 1;
+  // Read only.
+  string uid = 2;
+  // Highest etcd revision of the node keys. Read only.
+  int64 revision = 3;
+
+  NodeSpec spec = 4;
+  // Reported by Keiki on registration. Read only.
+  NodeInfo info = 5;
+  // Read only.
+  NodeStatus status = 6;
+}
+
+message NodeSpec {
+  // False when the node is cordoned.
+  bool schedulable = 1;
+  // When true, the controller evicts every pod of the node. Once the node is
+  // empty, it is set back to false and `schedulable` is set to false.
+  bool draining = 2;
+}
+
+message NodeInfo {
+  NodeRole role = 1;
+  // Full containerd runtime names.
+  repeated string runtimes = 2;
+  // Must not overlap the pod CIDR of another node.
+  string pod_cidr = 3;
+  Resources capacity = 4;
+}
+
+enum NodeRole {
+  NODE_ROLE_UNSPECIFIED = 0;
+  NODE_ROLE_WORKER = 1;
+  NODE_ROLE_CONTROL_PLANE = 2;
+}
+
+message NodeStatus {
+  // Derived when the node is read.
+  NodeCondition condition = 1;
+  string message = 2;
+  optional google.protobuf.Timestamp last_heartbeat = 3;
+  // Sum of the resources of the pods bound to the node. Used for scheduling.
+  Resources allocated = 4;
+  // etcd revision of the last `allocated` change. Compared with the revision
+  // returned by Bind to know when an assumed pod is reflected in the cache.
+  int64 allocated_revision = 5;
+  // Actual usage measured by Keiki. Informational only.
+  Resources usage = 6;
+}
+
+enum NodeCondition {
+  NODE_CONDITION_UNSPECIFIED = 0;
+  // The heartbeat lease is alive and Keiki reports healthy.
+  NODE_CONDITION_READY = 1;
+  // The heartbeat lease is alive but Keiki reports unhealthy.
+  NODE_CONDITION_UNHEALTHY = 2;
+  // The heartbeat lease expired.
+  NODE_CONDITION_UNREACHABLE = 3;
+}
+
+message GetNodeRequest {
+  string name = 1;
+}
+
+message ListNodesRequest {}
+
+message ListNodesResponse {
+  repeated Node nodes = 1;
+  // Revision at which the list was taken. Watch from this revision.
+  int64 revision = 2;
+}
+
+message WatchNodesRequest {
+  int64 from_revision = 1;
+}
+
+message NodeEvent {
+  EventType type = 1;
+  int64 revision = 2;
+  // Unset for bookmarks.
+  optional Node node = 3;
+}
+
+// Only the fields that are set are updated.
+message UpdateNodeSpecRequest {
+  string name = 1;
+  optional bool schedulable = 2;
+  optional bool draining = 3;
+  // If set, the update is only applied if the node is still at this revision.
+  optional int64 revision = 4;
+}
+
+message DeleteNodeRequest {
+  string name = 1;
+  // If set, only delete the node if it still has this uid.
+  optional string uid = 2;
+}
+
+message DeleteNodeResponse {}

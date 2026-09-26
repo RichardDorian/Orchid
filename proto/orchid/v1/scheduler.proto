@@ -1,0 +1,127 @@
+syntax = "proto3";
+
+package orchid.v1;
+
+import "google/protobuf/duration.proto";
+import "orchid/v1/common.proto";
+import "orchid/v1/pod.proto";
+
+// Calls made by Ikebana.
+//
+// Authorization (mTLS mode): ikebana only.
+service SchedulerService {
+  // Binds a pod to a node in a single etcd transaction.
+  // Errors carry a google.rpc.ErrorInfo detail with domain "orchid.io" and
+  // one of the BindFailure names as reason:
+  // - RESOURCE_EXHAUSTED: BIND_FAILURE_INSUFFICIENT_RESOURCES
+  // - ABORTED: every other failure
+  rpc Bind(BindRequest) returns (BindResponse);
+}
+
+message BindRequest {
+  string pod = 1;
+  // Revision of the pod seen by the scheduler.
+  int64 pod_revision = 2;
+  string node = 3;
+  // Token returned by LeadershipService.AcquireLeadership.
+  int64 leader_token = 4;
+}
+
+message BindResponse {
+  PodBinding binding = 1;
+  // Revision of the transaction, which is the new `allocated_revision` of the node.
+  int64 revision = 2;
+}
+
+enum BindFailure {
+  BIND_FAILURE_UNSPECIFIED = 0;
+  // The pod doesn't fit on the node anymore. Refresh the cache and requeue.
+  BIND_FAILURE_INSUFFICIENT_RESOURCES = 1;
+  // The node is unreachable, unschedulable, draining, or doesn't provide the pod runtime.
+  // Refresh the cache and requeue.
+  BIND_FAILURE_NODE_UNAVAILABLE = 2;
+  // The pod changed since `pod_revision`. Drop it, the watch will deliver the new version.
+  BIND_FAILURE_POD_CHANGED = 3;
+  // The pod is already bound. Drop it.
+  BIND_FAILURE_POD_ALREADY_BOUND = 4;
+  // The leader token is stale: stop scheduling.
+  BIND_FAILURE_STALE_LEADER_TOKEN = 5;
+}
+
+// Leader election for components that don't talk to etcd directly.
+//
+// Authorization (mTLS mode): ikebana, for the "ikebana" election only.
+service LeadershipService {
+  // Returns the current leader, if any. Watch from the returned revision.
+  rpc GetLeader(GetLeaderRequest) returns (GetLeaderResponse);
+
+  // Tries to become leader (put-if-absent of the leader key, attached to a new lease).
+  rpc AcquireLeadership(AcquireLeadershipRequest) returns (AcquireLeadershipResponse);
+
+  // Must be called every ttl / 3. Fails with NOT_FOUND if the leadership has
+  // been lost: the caller must stop acting as leader immediately.
+  rpc RenewLeadership(RenewLeadershipRequest) returns (RenewLeadershipResponse);
+
+  // Revokes the lease on graceful shutdown.
+  rpc ReleaseLeadership(ReleaseLeadershipRequest) returns (ReleaseLeadershipResponse);
+
+  // Followers watch the leader key and call AcquireLeadership when it is deleted.
+  rpc WatchLeader(WatchLeaderRequest) returns (stream LeaderEvent);
+}
+
+message Leader {
+  string candidate = 1;
+  // create_revision of the leader key, used as fencing token.
+  int64 token = 2;
+}
+
+message GetLeaderRequest {
+  string election = 1;
+}
+
+message GetLeaderResponse {
+  // Unset if there is no leader.
+  optional Leader leader = 1;
+  int64 revision = 2;
+}
+
+message AcquireLeadershipRequest {
+  string election = 1;
+  string candidate = 2;
+}
+
+message AcquireLeadershipResponse {
+  bool acquired = 1;
+  // The current leader: the caller if `acquired`, otherwise the other candidate.
+  Leader leader = 2;
+  // Only set if `acquired`.
+  google.protobuf.Duration ttl = 3;
+}
+
+message RenewLeadershipRequest {
+  string election = 1;
+  int64 token = 2;
+}
+
+message RenewLeadershipResponse {
+  google.protobuf.Duration ttl = 1;
+}
+
+message ReleaseLeadershipRequest {
+  string election = 1;
+  int64 token = 2;
+}
+
+message ReleaseLeadershipResponse {}
+
+message WatchLeaderRequest {
+  string election = 1;
+  int64 from_revision = 2;
+}
+
+message LeaderEvent {
+  EventType type = 1;
+  int64 revision = 2;
+  // Unset for bookmarks. For DELETED, the leader that stepped down.
+  optional Leader leader = 3;
+}

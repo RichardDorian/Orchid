@@ -1,0 +1,191 @@
+syntax = "proto3";
+
+package orchid.v1;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+import "orchid/v1/common.proto";
+
+// Public pod API.
+//
+// Authorization (mTLS mode):
+// - users: every call
+// - ikebana: GetPod, ListPods, WatchPods
+// - keiki:<node>: GetPod, ListPods, WatchPods with `filter.node` set to its own node
+service PodService {
+  // Admission: validates the pod, sets an empty runtime to the cluster default
+  // runtime, assigns the uid and sets the phase to PENDING.
+  // Fails with ALREADY_EXISTS if a pod with this name exists.
+  rpc CreatePod(CreatePodRequest) returns (Pod);
+
+  rpc GetPod(GetPodRequest) returns (Pod);
+
+  rpc ListPods(ListPodsRequest) returns (ListPodsResponse);
+
+  rpc WatchPods(WatchPodsRequest) returns (stream PodEvent);
+
+  // Sets the phase to TERMINATING. The pod is removed once its node finalized it,
+  // or immediately if it is not bound.
+  rpc DeletePod(DeletePodRequest) returns (Pod);
+
+  // The priority is the only mutable field of a pod spec.
+  rpc UpdatePodPriority(UpdatePodPriorityRequest) returns (Pod);
+}
+
+message Pod {
+  // Unique in the cluster, DNS label.
+  string name = 1;
+  // Assigned by Labellum at creation. Read only.
+  string uid = 2;
+  // Highest etcd revision of the pod keys. Read only.
+  int64 revision = 3;
+  // Read only.
+  google.protobuf.Timestamp created_at = 4;
+
+  PodSpec spec = 5;
+  // Unset until the pod is scheduled for the first time. Read only.
+  optional PodBinding binding = 6;
+  // Read only.
+  PodStatus status = 7;
+}
+
+// Written by the user. Immutable after creation, except `priority`.
+message PodSpec {
+  // Full containerd runtime name. Set to the cluster default runtime at creation if empty.
+  string runtime = 1;
+  // Higher priorities are scheduled first. Can be negative.
+  int32 priority = 2;
+  RestartPolicy restart_policy = 3;
+  // Time between SIGTERM and SIGKILL when stopping containers. Defaults to 30s.
+  google.protobuf.Duration termination_grace_period = 4;
+  // At least one. Names must be unique in the pod.
+  repeated Container containers = 5;
+}
+
+// Applies to each container independently.
+enum RestartPolicy {
+  // Treated as ALWAYS.
+  RESTART_POLICY_UNSPECIFIED = 0;
+  RESTART_POLICY_ALWAYS = 1;
+  // Restart if the container exited with a non zero code.
+  RESTART_POLICY_FAILURE = 2;
+  RESTART_POLICY_NEVER = 3;
+}
+
+message Container {
+  // Unique in the pod.
+  string name = 1;
+  // OCI image reference.
+  string image = 2;
+  // Reserved on the node and enforced as limits.
+  Resources resources = 3;
+}
+
+// Never removed once created: rescheduling clears `node` and keeps `attempt`.
+message PodBinding {
+  // Empty while the pod is waiting to be rescheduled.
+  string node = 1;
+  // Starts at 1, incremented by every bind.
+  uint32 attempt = 2;
+}
+
+message PodStatus {
+  PodPhase phase = 1;
+  // Machine readable reason of the last transition, e.g. "ImagePullBackOff", "NodeLost", "Evicted".
+  string reason = 2;
+  // Human readable details.
+  string message = 3;
+  // When the pod last became pending. Orders pods of the same priority.
+  google.protobuf.Timestamp pending_since = 4;
+  // Set when the pod is deleted.
+  optional google.protobuf.Timestamp deletion_requested_at = 5;
+  repeated ContainerStatus containers = 6;
+}
+
+enum PodPhase {
+  POD_PHASE_UNSPECIFIED = 0;
+  // Waiting to be scheduled.
+  POD_PHASE_PENDING = 1;
+  // Bound to a node, images are being pulled or the sandbox is being created.
+  POD_PHASE_CREATING = 2;
+  // The sandbox exists and at least one container is running or restarting.
+  POD_PHASE_RUNNING = 3;
+  // All containers exited with code 0 and none will be restarted.
+  POD_PHASE_SUCCEEDED = 4;
+  // All containers exited, at least one with a non zero code, and none will be
+  // restarted. Also used when the pod is lost with its node.
+  POD_PHASE_FAILED = 5;
+  // Deleted or evicted, containers are being stopped.
+  POD_PHASE_TERMINATING = 6;
+}
+
+message ContainerStatus {
+  string name = 1;
+  ContainerState state = 2;
+  uint32 restart_count = 3;
+  optional google.protobuf.Timestamp started_at = 4;
+  // Exit code of the last termination, if any.
+  optional int32 exit_code = 5;
+}
+
+enum ContainerState {
+  CONTAINER_STATE_UNSPECIFIED = 0;
+  // Being created, or waiting for its restart backoff.
+  CONTAINER_STATE_WAITING = 1;
+  CONTAINER_STATE_RUNNING = 2;
+  CONTAINER_STATE_EXITED = 3;
+}
+
+message CreatePodRequest {
+  string name = 1;
+  PodSpec spec = 2;
+}
+
+message GetPodRequest {
+  string name = 1;
+}
+
+// Setting both `node` and `unbound` is INVALID_ARGUMENT.
+message PodFilter {
+  // Only pods bound to this node.
+  optional string node = 1;
+  // Only unbound pods: no binding yet, or binding with an empty node.
+  bool unbound = 2;
+}
+
+message ListPodsRequest {
+  PodFilter filter = 1;
+}
+
+message ListPodsResponse {
+  repeated Pod pods = 1;
+  // Revision at which the list was taken. Watch from this revision.
+  int64 revision = 2;
+}
+
+message WatchPodsRequest {
+  PodFilter filter = 1;
+  int64 from_revision = 2;
+}
+
+// A pod that stops matching the filter (e.g. rescheduled away from the watched
+// node) is sent as DELETED.
+message PodEvent {
+  EventType type = 1;
+  int64 revision = 2;
+  // Unset for bookmarks.
+  optional Pod pod = 3;
+}
+
+message DeletePodRequest {
+  string name = 1;
+  // If set, only delete the pod if it still has this uid.
+  optional string uid = 2;
+}
+
+message UpdatePodPriorityRequest {
+  string name = 1;
+  int32 priority = 2;
+  // If set, the update is only applied if the pod is still at this revision.
+  optional int64 revision = 3;
+}

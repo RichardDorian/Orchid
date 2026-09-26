@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package orchid.v1;
+
+import "google/protobuf/duration.proto";
+import "orchid/v1/common.proto";
+
+// Cluster wide configuration, stored in etcd.
+// Readable by every identity, writable by users.
+service ClusterService {
+  rpc GetClusterConfig(GetClusterConfigRequest) returns (ClusterConfig);
+
+  // Fails with FAILED_PRECONDITION if the new default runtime is not provided
+  // by every registered node, or if `revision` doesn't match.
+  rpc UpdateClusterConfig(UpdateClusterConfigRequest) returns (ClusterConfig);
+
+  rpc WatchClusterConfig(WatchClusterConfigRequest) returns (stream ClusterConfigEvent);
+}
+
+message ClusterConfig {
+  // Read only.
+  int64 revision = 1;
+  // Runtime used by pods that don't specify one, e.g. "io.containerd.runc.v2".
+  string default_runtime = 2;
+  // TTL of the node heartbeat leases. Keiki sends a heartbeat every TTL / 3.
+  google.protobuf.Duration node_lease_ttl = 3;
+  // Time between a node becoming unreachable and its pods being rescheduled.
+  google.protobuf.Duration pod_eviction_delay = 4;
+  // TTL of the leader election leases (Labellum controller, Ikebana).
+  google.protobuf.Duration leader_lease_ttl = 5;
+}
+
+message GetClusterConfigRequest {}
+
+// Only the fields that are set are updated.
+message UpdateClusterConfigRequest {
+  optional string default_runtime = 1;
+  optional google.protobuf.Duration node_lease_ttl = 2;
+  optional google.protobuf.Duration pod_eviction_delay = 3;
+  optional google.protobuf.Duration leader_lease_ttl = 4;
+  // If set, the update is only applied if the configuration is still at this revision.
+  optional int64 revision = 5;
+}
+
+message WatchClusterConfigRequest {
+  int64 from_revision = 1;
+}
+
+message ClusterConfigEvent {
+  EventType type = 1;
+  int64 revision = 2;
+  // Unset for bookmarks.
+  optional ClusterConfig config = 3;
+}

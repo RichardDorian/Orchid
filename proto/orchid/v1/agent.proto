@@ -1,0 +1,90 @@
+syntax = "proto3";
+
+package orchid.v1;
+
+import "google/protobuf/duration.proto";
+import "orchid/v1/common.proto";
+import "orchid/v1/node.proto";
+import "orchid/v1/pod.proto";
+
+// Calls made by Keiki. Keiki watches its pods with PodService.WatchPods
+// (filter.node = its node).
+//
+// Authorization (mTLS mode): keiki:<node> only, for its own node.
+// In mTLS mode the node name is taken from the certificate CN, a `node` field
+// that doesn't match it fails with PERMISSION_DENIED.
+service NodeAgentService {
+  // Creates the node on first registration, then grants its heartbeat lease.
+  // Fails with FAILED_PRECONDITION if:
+  // - the runtimes don't contain the cluster default runtime,
+  // - the pod CIDR overlaps the pod CIDR of another node,
+  // - the node has bound pods that don't fit the new information.
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+
+  // Renews the node lease. Fails with NOT_FOUND if the lease expired:
+  // Keiki must register again.
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+
+  // Fails with FAILED_PRECONDITION if the pod is not bound to this node with this attempt.
+  rpc UpdatePodStatus(UpdatePodStatusRequest) returns (UpdatePodStatusResponse);
+
+  // Called once the containers of a terminating pod are stopped and its sandbox removed.
+  // Fails with FAILED_PRECONDITION if the pod is not bound to this node with this attempt.
+  rpc FinalizePod(FinalizePodRequest) returns (FinalizePodResponse);
+}
+
+message RegisterRequest {
+  // Required in cleartext mode. In mTLS mode, optional and must match the certificate.
+  string node = 1;
+  NodeRole role = 2;
+  // Only applied on first registration. Defaults to true for workers, false for control planes.
+  optional bool schedulable = 3;
+  repeated string runtimes = 4;
+  string pod_cidr = 5;
+  Resources capacity = 6;
+}
+
+message RegisterResponse {
+  // Name under which the node is registered.
+  string node = 1;
+  // Keiki sends a heartbeat every lease_ttl / 3.
+  google.protobuf.Duration lease_ttl = 2;
+}
+
+message HeartbeatRequest {
+  string node = 1;
+  NodeHealth health = 2;
+  // Details about the health, e.g. why the node is unhealthy.
+  string message = 3;
+  Resources usage = 4;
+}
+
+enum NodeHealth {
+  NODE_HEALTH_UNSPECIFIED = 0;
+  NODE_HEALTH_HEALTHY = 1;
+  // e.g. containerd is unreachable.
+  NODE_HEALTH_UNHEALTHY = 2;
+}
+
+message HeartbeatResponse {}
+
+message UpdatePodStatusRequest {
+  string pod = 1;
+  string uid = 2;
+  uint32 attempt = 3;
+  // CREATING, RUNNING, SUCCEEDED or FAILED. Any other phase is INVALID_ARGUMENT.
+  PodPhase phase = 4;
+  string reason = 5;
+  string message = 6;
+  repeated ContainerStatus containers = 7;
+}
+
+message UpdatePodStatusResponse {}
+
+message FinalizePodRequest {
+  string pod = 1;
+  string uid = 2;
+  uint32 attempt = 3;
+}
+
+message FinalizePodResponse {}

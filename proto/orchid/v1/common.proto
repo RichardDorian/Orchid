@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package orchid.v1;
+
+// Amount of compute resources.
+// Configuration files and the CLI use quantity strings ("300m", "16Gi"),
+// on the wire they are always converted to their base unit.
+message Resources {
+  // CPU in millicores (1000 = 1 core).
+  uint64 cpu_millis = 1;
+  // Memory in bytes.
+  uint64 memory_bytes = 2;
+}
+
+// Kind of event sent on a watch stream.
+enum EventType {
+  EVENT_TYPE_UNSPECIFIED = 0;
+  // The object was created, or started matching the watch filter.
+  EVENT_TYPE_ADDED = 1;
+  // The object was modified and still matches the watch filter.
+  EVENT_TYPE_MODIFIED = 2;
+  // The object was deleted, or stopped matching the watch filter.
+  // The event carries the last known state of the object.
+  EVENT_TYPE_DELETED = 3;
+  // No object: only carries the current revision, so idle watchers
+  // can resume from a recent revision.
+  EVENT_TYPE_BOOKMARK = 4;
+}
+
+// Watch rules, common to every Watch call:
+// - A client starts with the matching List/Get call, then watches from the
+//   revision it returned.
+// - When the stream breaks, the client resumes (on any Labellum instance) from
+//   the revision of the last event it received, bookmarks included.
+// - If `from_revision` has been compacted, the stream fails with OUT_OF_RANGE:
+//   the client must List again and reconcile.
