@@ -1,0 +1,18 @@
+[package]
+name = "orchid-api"
+description = "Domain types of the Orchid API: resources, validation and protobuf conversions"
+readme = "README.md"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+humantime.workspace = true
+ipnet.workspace = true
+jiff.workspace = true
+orchid-proto.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
