@@ -1,0 +1,19 @@
+[package]
+name = "orchid-store"
+description = "Storage layer of Labellum: key-value store abstraction over etcd, with an in-memory implementation for tests"
+readme = "README.md"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+etcd-client.workspace = true
+futures-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["sync", "time", "rt", "macros"] }
+
+[dev-dependencies]
+futures-util.workspace = true
+tokio = { workspace = true, features = ["sync", "time", "rt", "macros", "test-util"] }
