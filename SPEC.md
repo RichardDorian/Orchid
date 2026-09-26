@@ -110,6 +110,8 @@ A pod is made of:
 - **metadata**: `name`, `uid` (assigned by Labellum at creation), `revision`, `created_at`.
 - **spec**: written by the user. Immutable after creation except `priority` (a pod must be deleted and re-created to change anything else).
 - **binding**: `node` and `attempt`, written when the pod is scheduled. `attempt` starts at 1 and is incremented every time the pod is rescheduled.
+  The binding key is created by the first bind and is never deleted while the pod exists: rescheduling only clears `node` and keeps `attempt`, so the next bind can increment it.
+  A pod is **bound** when its binding has a non empty `node`, and **unbound** otherwise (no binding key yet, or `node` cleared).
 - **status**: `phase`, `reason`, `message`, `pending_since`, `deletion_requested_at` and one status per container.
 
 On creation (admission), Labellum:
@@ -217,7 +219,7 @@ Responsibilities:
 
 - **Lost nodes**: when a node lease key disappears, the controller waits `pod_eviction_delay` (the timer restarts on leader failover, which is conservative). If the node is still unreachable, for each pod bound to it:
   1. sets `phase = failed`, `reason = "NodeLost"`,
-  2. unless the pod restart policy is `never`, reschedules it: in a single transaction, deletes the binding, subtracts its resources from the node `allocated` key and sets `phase = pending`, `pending_since = now`. The next binding increments `attempt`.
+  2. unless the pod restart policy is `never`, reschedules it: in a single transaction, clears the binding `node` (keeping `attempt`), subtracts its resources from the node `allocated` key and sets `phase = pending`, `pending_since = now`. The next binding increments `attempt`.
 
   Pods in the `terminating` phase are finalized instead of being rescheduled.
 - **Draining**: when a node has `draining = true`, the controller sets every pod bound to it to `terminating` with `reason = "Evicted"`. When Keiki finalizes an evicted pod, the controller reschedules it (evictions are not failures, the restart policy is ignored). When no pod is bound to the node anymore, the controller sets `draining = false` and `schedulable = false`: the node stays cordoned.
@@ -231,10 +233,10 @@ Known limitation: during a network partition, a rescheduled pod may run on two n
 Ikebana binds a pod with `Bind(pod, pod_revision, node, leader_token)`. Labellum reads the node info and `allocated` key, checks that the pod fits, then commits a single etcd transaction that:
 
 - checks the `ikebana` leader key still has `create_revision == leader_token` (fencing),
-- checks the pod has no binding and its `revision` is still `pod_revision`,
+- checks the pod is unbound (no binding key, or an empty `node`) and its `revision` is still `pod_revision`,
 - checks the node lease key exists (the node is not unreachable),
 - checks the node `info` and `allocated` keys have not changed since they were read,
-- writes the binding (`attempt` = previous attempt + 1), adds the pod resources to `allocated` and sets `phase = creating`.
+- writes the binding with the node and `attempt` = previous attempt + 1 (1 if there was no binding key), adds the pod resources to `allocated` and sets `phase = creating`.
 
 If only the node keys changed, Labellum reads them again and retries. `Bind` fails with:
 - `RESOURCE_EXHAUSTED` if the pod doesn't fit on the node anymore,

@@ -43,9 +43,12 @@ image = "ghcr.io/acme/my-app:latest"             # OCI image to deploy
 resources = { cpu = "300m", memory = "500Mi" }   # Reserved on the node and enforced as limits
 
 # ---------------------------------------------------------------------------
-# Binding: written when the pod is scheduled. Read only. Absent while pending.
+# Binding: written when the pod is scheduled. Read only.
+# Absent until the pod is scheduled for the first time. When the pod is
+# rescheduled, `node` is cleared (empty) and `attempt` is kept.
 # ---------------------------------------------------------------------------
 [binding]
+# Empty while the pod is waiting to be (re)scheduled
 node = "phoenix"
 # Starts at 1, incremented every time the pod is rescheduled.
 attempt = 1
