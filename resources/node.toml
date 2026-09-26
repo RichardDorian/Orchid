@@ -1,0 +1,64 @@
+# ---------------------------------------------------------------------------
+# Metadata
+# ---------------------------------------------------------------------------
+
+# Name of the node. Read only.
+# mTLS mode: taken from the Keiki certificate CN (`keiki:<name>`).
+# Cleartext mode: sent by Keiki (hostname of the machine unless configured).
+name = "phoenix"
+# Read only
+uid = "01926f3a-11d2-7f40-8a3b-5c6d7e8f9a0b"
+# Highest etcd revision of the node keys. Read only.
+revision = 18350
+
+# ---------------------------------------------------------------------------
+# Spec: written by users (and by the controller at the end of a drain)
+# ---------------------------------------------------------------------------
+[spec]
+# Whether or not this node can receive new workloads (`false` = cordoned).
+# Initialized from the Keiki configuration on first registration only.
+schedulable = true
+# When `true`, the controller evicts every pod of the node and reschedules them.
+# Once the node is empty, it is set back to `false` and `schedulable` to `false`.
+draining = false
+
+# ---------------------------------------------------------------------------
+# Info: reported by Keiki on registration. Read only.
+# ---------------------------------------------------------------------------
+[info]
+# `control-plane` or `worker`. Indicative, only used to pick the default `schedulable`
+# value on first registration (`false` for control planes).
+role = "worker"
+# Range in which pods get their ip address. Must not overlap another node.
+pod_cidr = "10.244.0.0/24"
+# Full containerd names of the runtimes available on the node.
+# Must contain the cluster default runtime.
+runtimes = ["io.containerd.runc.v2", "io.containerd.kata.v2", "io.containerd.runsc.v1"]
+
+# Maximum capacity for this node
+[info.capacity]
+cpu = "12"       # 12 cores
+memory = "16Gi"
+
+# ---------------------------------------------------------------------------
+# Status: read only.
+# ---------------------------------------------------------------------------
+[status]
+# Derived when the node is read, never stored:
+# `ready`: the heartbeat lease is alive and Keiki reports healthy
+# `unhealthy`: the heartbeat lease is alive but Keiki reports unhealthy (e.g. containerd unreachable)
+# `unreachable`: the heartbeat lease expired
+condition = "ready"
+message = ""
+last_heartbeat = 2026-09-26T10:15:42Z
+
+# Sum of the resources of all pods bound to the node. Maintained by Labellum.
+# This is the desired state and what the scheduler uses.
+[status.allocated]
+cpu = "300m"
+memory = "500Mi"
+
+# Actual usage measured by Keiki. Informational only, never used for scheduling.
+[status.usage]
+cpu = "120m"
+memory = "310Mi"

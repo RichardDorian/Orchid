@@ -1,0 +1,25 @@
+# Address at which the gRPC server binds: `tcp://host:port` or `unix://path`.
+# Several addresses can be given, for example to also serve Ikebana on a local socket.
+listen = ["tcp://0.0.0.0:36116", "unix:///run/orchid/labellum.sock"]
+
+# Cluster wide settings (default runtime, lease TTLs...) are not configured here:
+# they are stored in etcd, see resources/cluster.toml.
+
+[etcd]
+# `http://` in cleartext mode, `https://` in mTLS mode.
+endpoints = ["https://127.0.0.1:2379"]
+
+# Client certificate used to connect to etcd.
+# Required in mTLS mode, must be absent in cleartext mode.
+[etcd.tls]
+certificate = "/etc/labellum/etcd-client.crt"
+private_key = "/etc/labellum/etcd-client.key"
+ca = "/etc/labellum/etcd-ca.crt"
+
+# Presence of this section enables mTLS mode. Remove it for cleartext mode.
+# The certificate CN must be `labellum` and its SANs must cover every address
+# clients use to reach this instance (node IPs, internal load balancer).
+[tls]
+certificate = "/etc/labellum/server.crt"
+private_key = "/etc/labellum/server.key"
+ca = "/etc/labellum/ca.crt"

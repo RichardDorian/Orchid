@@ -1,0 +1,14 @@
+# URLs of Labellum instances. Ikebana fails over to the next one on errors.
+# `http://` in cleartext mode, `https://` in mTLS mode, `unix://` in both.
+# In clusters with several control planes this is usually a single internal load balancer URL.
+labellum = ["unix:///run/orchid/labellum.sock"]
+
+# Name used as candidate in the leader election. Optional, defaults to the hostname.
+# candidate = "cp-1"
+
+# Presence of this section enables mTLS mode. Remove it for cleartext mode.
+# The certificate CN must be `ikebana`.
+[tls]
+certificate = "/etc/ikebana/client.crt"
+private_key = "/etc/ikebana/client.key"
+ca = "/etc/ikebana/ca.crt"

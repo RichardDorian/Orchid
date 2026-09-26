@@ -1,0 +1,18 @@
+# Cluster wide configuration, stored in etcd (`/orchid/config/cluster`).
+# Readable by everyone, writable by users.
+# Created with these default values by the first Labellum that starts.
+
+# Runtime used by pods that don't specify one. Written into the pod when it is created,
+# so changing it doesn't affect existing pods.
+# Changing it is rejected if a registered node doesn't provide the new runtime.
+default_runtime = "io.containerd.runc.v2"
+
+# TTL of the node heartbeat leases. Keiki sends a heartbeat every TTL / 3.
+node_lease_ttl = "15s"
+
+# Time between a node becoming unreachable and its pods being failed and rescheduled.
+pod_eviction_delay = "30s"
+
+# TTL of the leader election leases (Labellum controller, Ikebana).
+# Leaders renew every TTL / 3.
+leader_lease_ttl = "15s"

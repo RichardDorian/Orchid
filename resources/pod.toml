@@ -1,0 +1,82 @@
+# ---------------------------------------------------------------------------
+# Metadata
+# ---------------------------------------------------------------------------
+
+# Name of the pod, unique in the cluster (DNS label)
+name = "my-app"
+# Unique identifier assigned by Labellum at creation. Read only.
+# Distinguishes a pod from a deleted pod that had the same name.
+uid = "01926f3e-8b1c-7c2a-9d4e-3f5a6b7c8d9e"
+# Highest etcd revision of the pod keys. Read only.
+revision = 18342
+# Read only
+created_at = 2026-09-26T10:12:00Z
+
+# ---------------------------------------------------------------------------
+# Spec: written by the user. Immutable after creation, except `priority`.
+# ---------------------------------------------------------------------------
+[spec]
+# Full containerd name of the runtime to use. Optional.
+# If not specified, Labellum sets it to the cluster default runtime when the pod is created.
+runtime = "io.containerd.runsc.v1"
+
+# Scheduling priority
+# When multiple pods are waiting to be scheduled, a pod with a higher priority
+# will be scheduled first, even if other pods are waiting for a longer time
+# Default value is 0. It can be negative and positive.
+priority = 0
+
+# Applies to each container independently, the container is restarted in place.
+# `always`: always restart the container, no matter the reason of termination
+# `failure`: restart the container if it exited with a non zero code
+# `never`: the container is never restarted
+# Restarts use an exponential backoff (10s doubled on each restart, capped at 5m).
+# Also decides whether the pod is rescheduled when its node is lost (not with `never`).
+restart_policy = "always"
+
+# Time given to containers to stop after SIGTERM before they get SIGKILL. Default: 30s
+termination_grace_period = "30s"
+
+[[spec.container]]
+name = "app"                                     # Unique in the pod
+image = "ghcr.io/acme/my-app:latest"             # OCI image to deploy
+resources = { cpu = "300m", memory = "500Mi" }   # Reserved on the node and enforced as limits
+
+# ---------------------------------------------------------------------------
+# Binding: written when the pod is scheduled. Read only. Absent while pending.
+# ---------------------------------------------------------------------------
+[binding]
+node = "phoenix"
+# Starts at 1, incremented every time the pod is rescheduled.
+attempt = 1
+
+# ---------------------------------------------------------------------------
+# Status: read only.
+# ---------------------------------------------------------------------------
+[status]
+# `pending`: waiting to be scheduled
+# `creating`: bound to a node, images are being pulled / sandbox created.
+#             Retryable errors (image pull...) keep this phase with a `reason`
+# `running`: at least one container is running or restarting
+# `succeeded`: all containers exited with code 0 and none will be restarted
+# `failed`: all containers exited, at least one with a non zero code, and none will be restarted,
+#           or the pod was lost with its node (reason `NodeLost`)
+# `terminating`: the pod was deleted or evicted, containers are being stopped
+phase = "running"
+# Machine readable reason of the last transition, e.g. `ImagePullBackOff`, `NodeLost`, `Evicted`
+reason = ""
+# Human readable details
+message = ""
+# When the pod last became pending. Used to order pods of the same priority.
+pending_since = 2026-09-26T10:12:00Z
+# Set when the pod is deleted
+# deletion_requested_at = 2026-09-26T11:00:00Z
+
+[[status.container]]
+name = "app"
+# `waiting` (being created or in restart backoff), `running`, `exited`
+state = "running"
+restart_count = 0
+started_at = 2026-09-26T10:12:08Z
+# Exit code of the last termination, if any
+# exit_code = 0

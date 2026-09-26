@@ -1,0 +1,42 @@
+# Name of the node. Optional, defaults to the hostname of the machine.
+# Only used in cleartext mode: in mTLS mode the name comes from the certificate CN (`keiki:<name>`),
+# and Keiki refuses to start if this value doesn't match it.
+# name = "phoenix"
+
+# Role to report to Labellum: `worker` or `control-plane`
+role = "worker"
+
+# Whether or not this node can receive workloads.
+# Only applied when the node is registered for the first time, afterwards the value stored
+# in the cluster wins (so a cordon set by a user survives agent restarts).
+# Optional, defaults to `true` for workers and `false` for control planes.
+schedulable = true
+
+# Range of ip addresses pods can use, this is given to the CNI.
+# Labellum rejects the registration if it overlaps the range of another node.
+pod_cidr = "10.244.0.0/24"
+
+# Full names of the containerd runtimes configured on this node.
+# The cluster default runtime must be in there.
+runtimes = ["io.containerd.runc.v2", "io.containerd.kata.v2", "io.containerd.runsc.v1"]
+
+# Path to the containerd socket
+containerd = "/run/containerd/containerd.sock"
+
+# URLs of Labellum instances. Keiki fails over to the next one on errors.
+# `http://` in cleartext mode, `https://` in mTLS mode, `unix://` in both.
+# In clusters with several control planes this is usually a single internal load balancer URL.
+labellum = ["https://10.0.0.1:36116", "https://10.0.0.2:36116", "https://10.0.0.3:36116"]
+
+# Maximum capacity for this node
+# It can be lower than the machine resources (if you want headroom)
+[capacity]
+cpu = "12"       # 12 cores
+memory = "16Gi"
+
+# Presence of this section enables mTLS mode. Remove it for cleartext mode.
+# The certificate CN must be `keiki:<node-name>`.
+[tls]
+certificate = "/etc/keiki/client.crt"
+private_key = "/etc/keiki/client.key"
+ca = "/etc/keiki/ca.crt"
