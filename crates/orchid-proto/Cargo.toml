@@ -1,0 +1,16 @@
+[package]
+name = "orchid-proto"
+description = "gRPC protocol definitions shared by the Orchid services"
+readme = "README.md"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+prost.workspace = true
+prost-types.workspace = true
+tonic.workspace = true
+tonic-prost.workspace = true
+
+[build-dependencies]
+tonic-prost-build.workspace = true
