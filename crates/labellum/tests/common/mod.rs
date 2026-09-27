@@ -12,9 +12,9 @@ use orchid_proto::v1::node_agent_service_client::NodeAgentServiceClient;
 use orchid_proto::v1::node_service_client::NodeServiceClient;
 use orchid_proto::v1::pod_service_client::PodServiceClient;
 use orchid_proto::v1::scheduler_service_client::SchedulerServiceClient;
+use orchid_transport::client::Connection;
 use orchid_transport::tls::TlsMaterial;
 use tokio::task::JoinHandle;
-use tonic::transport::Channel;
 
 pub use labellum::testing::fast_config;
 
@@ -34,31 +34,31 @@ impl Cluster {
         }
     }
 
-    pub fn channel(&self) -> Channel {
+    pub fn channel(&self) -> Connection {
         self.server.channel(None)
     }
 
-    pub fn channel_as(&self, tls: &TlsMaterial) -> Channel {
+    pub fn channel_as(&self, tls: &TlsMaterial) -> Connection {
         self.server.channel(Some(tls))
     }
 
-    pub fn pods(&self) -> PodServiceClient<Channel> {
+    pub fn pods(&self) -> PodServiceClient<Connection> {
         PodServiceClient::new(self.channel())
     }
 
-    pub fn nodes(&self) -> NodeServiceClient<Channel> {
+    pub fn nodes(&self) -> NodeServiceClient<Connection> {
         NodeServiceClient::new(self.channel())
     }
 
-    pub fn agent(&self) -> NodeAgentServiceClient<Channel> {
+    pub fn agent(&self) -> NodeAgentServiceClient<Connection> {
         NodeAgentServiceClient::new(self.channel())
     }
 
-    pub fn scheduler(&self) -> SchedulerServiceClient<Channel> {
+    pub fn scheduler(&self) -> SchedulerServiceClient<Connection> {
         SchedulerServiceClient::new(self.channel())
     }
 
-    pub fn leadership(&self) -> LeadershipServiceClient<Channel> {
+    pub fn leadership(&self) -> LeadershipServiceClient<Connection> {
         LeadershipServiceClient::new(self.channel())
     }
 }

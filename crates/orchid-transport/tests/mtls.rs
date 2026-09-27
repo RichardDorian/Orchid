@@ -221,3 +221,73 @@ async fn shutdown_closes_the_listener_and_open_streams() {
         .unwrap();
     assert!(started.elapsed() >= server::SHUTDOWN_GRACE);
 }
+
+/// Starts a cleartext server, returns its URL and a handle stopping it.
+async fn start_stoppable() -> (
+    ServerUrl,
+    tokio::sync::oneshot::Sender<()>,
+    tokio::task::JoinHandle<()>,
+) {
+    let listener = Listener::bind(&tcp()).await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let router = server::builder(None)
+        .unwrap()
+        .add_service(ClusterServiceServer::new(WhoAmI));
+    let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
+    let task = tokio::spawn(async move {
+        server::serve(router, vec![listener], async move {
+            let _ = stopped.await;
+        })
+        .await
+        .unwrap();
+    });
+    (
+        ServerUrl::Tcp(format!("http://127.0.0.1:{port}")),
+        stop,
+        task,
+    )
+}
+
+#[tokio::test]
+async fn fails_over_between_servers() {
+    use std::time::Duration;
+
+    let (first, stop_first, first_task) = start_stoppable().await;
+    let (second, stop_second, second_task) = start_stoppable().await;
+    let connection = orchid_transport::client::connect(&[first, second], None).unwrap();
+    let mut client = ClusterServiceClient::new(connection);
+    let call = |client: &mut ClusterServiceClient<_>| {
+        let mut client = client.clone();
+        async move {
+            client
+                .get_cluster_config(pb::GetClusterConfigRequest {})
+                .await
+        }
+    };
+    assert!(call(&mut client).await.is_ok());
+
+    stop_first.send(()).unwrap();
+    first_task.await.unwrap();
+    let mut failures = 0;
+    for _ in 0..20 {
+        if call(&mut client).await.is_err() {
+            failures += 1;
+        }
+    }
+    assert!(
+        failures <= 1,
+        "{failures} requests failed after the first server stopped"
+    );
+
+    // Without any server, calls fail instead of hanging.
+    stop_second.send(()).unwrap();
+    second_task.await.unwrap();
+    let mut failed = false;
+    for _ in 0..5 {
+        let result = tokio::time::timeout(Duration::from_secs(10), call(&mut client))
+            .await
+            .expect("calls must not hang");
+        failed |= result.is_err();
+    }
+    assert!(failed);
+}

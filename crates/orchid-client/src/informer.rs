@@ -14,8 +14,8 @@ use orchid_api::{Node, Pod, Revision};
 use orchid_proto::v1 as pb;
 use orchid_proto::v1::node_service_client::NodeServiceClient;
 use orchid_proto::v1::pod_service_client::PodServiceClient;
+use orchid_transport::client::Connection;
 use tokio::sync::mpsc;
-use tonic::transport::Channel;
 use tonic::{Code, Status};
 use tracing::{debug, warn};
 
@@ -134,12 +134,12 @@ fn change<T>(kind: i32, object: T) -> Option<Change<T>> {
 
 /// Pods matching a filter.
 pub struct PodSource {
-    client: PodServiceClient<Channel>,
+    client: PodServiceClient<Connection>,
     filter: pb::PodFilter,
 }
 
 impl PodSource {
-    pub fn new(channel: Channel, filter: pb::PodFilter) -> Self {
+    pub fn new(channel: Connection, filter: pb::PodFilter) -> Self {
         Self {
             client: PodServiceClient::new(channel),
             filter,
@@ -195,11 +195,11 @@ impl WatchSource for PodSource {
 
 /// Every node.
 pub struct NodeSource {
-    client: NodeServiceClient<Channel>,
+    client: NodeServiceClient<Connection>,
 }
 
 impl NodeSource {
-    pub fn new(channel: Channel) -> Self {
+    pub fn new(channel: Connection) -> Self {
         Self {
             client: NodeServiceClient::new(channel),
         }

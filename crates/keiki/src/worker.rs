@@ -12,10 +12,10 @@ use std::time::Duration;
 use orchid_api::{Pod, PodPhase, Timestamp};
 use orchid_proto::v1 as pb;
 use orchid_proto::v1::node_agent_service_client::NodeAgentServiceClient;
+use orchid_transport::client::Connection;
 use tokio::sync::watch;
 use tokio::time::Instant;
 use tonic::Code;
-use tonic::transport::Channel;
 use tracing::{debug, info, warn};
 
 use crate::runtime::{ContainerState, PodRef, Runtime, RuntimeError};
@@ -26,7 +26,7 @@ const POLL_INTERVAL: Duration = Duration::from_secs(1);
 
 pub struct Worker<R> {
     runtime: Arc<R>,
-    client: NodeAgentServiceClient<Channel>,
+    client: NodeAgentServiceClient<Connection>,
     reference: PodRef,
     created: bool,
     containers: HashMap<String, ContainerRecord>,
@@ -40,7 +40,7 @@ pub struct Worker<R> {
 impl<R: Runtime> Worker<R> {
     pub fn new(
         runtime: Arc<R>,
-        channel: Channel,
+        channel: Connection,
         reference: PodRef,
         initial_backoff: Duration,
     ) -> Self {

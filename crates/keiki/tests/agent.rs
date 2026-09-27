@@ -14,8 +14,8 @@ use orchid_proto::v1::leadership_service_client::LeadershipServiceClient;
 use orchid_proto::v1::node_service_client::NodeServiceClient;
 use orchid_proto::v1::pod_service_client::PodServiceClient;
 use orchid_proto::v1::scheduler_service_client::SchedulerServiceClient;
+use orchid_transport::client::Connection;
 use tokio_util::sync::CancellationToken;
-use tonic::transport::Channel;
 
 struct Harness {
     server: TestServer,
@@ -63,7 +63,7 @@ impl Harness {
         harness
     }
 
-    fn channel(&self) -> Channel {
+    fn channel(&self) -> Connection {
         self.server.channel(None)
     }
 

@@ -12,14 +12,14 @@ pub mod scheduling;
 
 use orchid_client::informer::{self, NodeSource, PodSource};
 use orchid_proto::v1 as pb;
+use orchid_transport::client::Connection;
 use tokio::sync::{mpsc, watch};
 use tokio_util::sync::CancellationToken;
-use tonic::transport::Channel;
 
 pub use leadership::ELECTION;
 
 /// Runs Ikebana until `shutdown` is cancelled.
-pub async fn run(channel: Channel, candidate: String, shutdown: CancellationToken) {
+pub async fn run(channel: Connection, candidate: String, shutdown: CancellationToken) {
     let (node_events, nodes) = mpsc::channel(256);
     let (pod_events, pods) = mpsc::channel(256);
     let unbound = pb::PodFilter {

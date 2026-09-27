@@ -36,9 +36,9 @@ use containerd_client::types::Platform;
 use containerd_client::types::transfer::{ImageStore, OciRegistry, UnpackConfiguration};
 use containerd_client::types::v1::Status as TaskStatus;
 use orchid_api::{Pod, Resources, Timestamp};
+use orchid_transport::client::Connection;
 use serde::de::DeserializeOwned;
 use sha2::{Digest, Sha256};
-use tonic::transport::Channel;
 use tonic::{Code, Request};
 use tracing::{debug, info};
 
@@ -85,7 +85,7 @@ impl ContainerdOptions {
 
 #[derive(Clone)]
 pub struct ContainerdRuntime {
-    channel: Channel,
+    channel: Connection,
     options: ContainerdOptions,
 }
 

@@ -7,11 +7,11 @@ use orchid_api::{Node, Pod, PodPhase};
 use orchid_client::informer::{Change, InformerEvent};
 use orchid_proto::v1 as pb;
 use orchid_proto::v1::scheduler_service_client::SchedulerServiceClient;
+use orchid_transport::client::Connection;
 use orchid_transport::errors;
 use tokio::sync::{mpsc, watch};
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
-use tonic::transport::Channel;
 use tracing::{debug, info, warn};
 
 use crate::scheduling::{Assumed, NodeEntry, choose_node, queue_key, relevant_change};
@@ -30,14 +30,14 @@ struct Queued {
 }
 
 pub struct Scheduler {
-    client: SchedulerServiceClient<Channel>,
+    client: SchedulerServiceClient<Connection>,
     nodes: HashMap<String, NodeEntry>,
     queue: HashMap<String, Queued>,
     paused_until: Option<Instant>,
 }
 
 impl Scheduler {
-    pub fn new(channel: Channel) -> Self {
+    pub fn new(channel: Connection) -> Self {
         Self {
             client: SchedulerServiceClient::new(channel),
             nodes: HashMap::new(),

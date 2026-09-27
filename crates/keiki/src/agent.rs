@@ -11,11 +11,11 @@ use orchid_api::{NodeRole, Pod, Resources};
 use orchid_client::informer::{self, Change, InformerEvent, PodSource};
 use orchid_proto::v1 as pb;
 use orchid_proto::v1::node_agent_service_client::NodeAgentServiceClient;
+use orchid_transport::client::Connection;
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tonic::Code;
-use tonic::transport::Channel;
 use tracing::{error, info, warn};
 
 use crate::runtime::{PodRef, Runtime};
@@ -73,7 +73,7 @@ impl Registration {
 /// untouched when the agent stops.
 pub async fn run<R: Runtime>(
     runtime: Arc<R>,
-    channel: Channel,
+    channel: Connection,
     registration: Registration,
     options: Options,
     shutdown: CancellationToken,
@@ -133,7 +133,7 @@ struct WorkerHandle {
 /// `shutdown` is cancelled.
 async fn session<R: Runtime>(
     runtime: Arc<R>,
-    channel: Channel,
+    channel: Connection,
     node: String,
     ttl: Duration,
     options: &Options,
@@ -204,7 +204,7 @@ async fn session<R: Runtime>(
 /// Starts, updates and stops workers to match the desired pods.
 fn sync_workers<R: Runtime>(
     runtime: &Arc<R>,
-    channel: &Channel,
+    channel: &Connection,
     options: &Options,
     desired: &HashMap<String, Pod>,
     workers: &mut HashMap<String, WorkerHandle>,
@@ -295,7 +295,7 @@ fn remove_orphans<R: Runtime>(
 /// doesn't know the registration anymore.
 async fn heartbeats<R: Runtime>(
     runtime: Arc<R>,
-    mut client: NodeAgentServiceClient<Channel>,
+    mut client: NodeAgentServiceClient<Connection>,
     node: String,
     ttl: Duration,
     expired: CancellationToken,

@@ -7,12 +7,12 @@ use orchid_proto::v1 as pb;
 use orchid_proto::v1::leadership_service_client::LeadershipServiceClient;
 use orchid_proto::v1::node_agent_service_client::NodeAgentServiceClient;
 use orchid_proto::v1::pod_service_client::PodServiceClient;
+use orchid_transport::client::Connection;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
-use tonic::transport::Channel;
 
 /// Registers a node and keeps it alive until the task is aborted.
-async fn node(channel: Channel, name: &str, index: u8, cpu_millis: u64) -> JoinHandle<()> {
+async fn node(channel: Connection, name: &str, index: u8, cpu_millis: u64) -> JoinHandle<()> {
     let mut agent = NodeAgentServiceClient::new(channel);
     agent
         .register(pb::RegisterRequest {
@@ -43,7 +43,7 @@ async fn node(channel: Channel, name: &str, index: u8, cpu_millis: u64) -> JoinH
     })
 }
 
-async fn create_pod(channel: Channel, name: &str, cpu_millis: u64) {
+async fn create_pod(channel: Connection, name: &str, cpu_millis: u64) {
     PodServiceClient::new(channel)
         .create_pod(pb::CreatePodRequest {
             name: name.into(),
@@ -63,7 +63,7 @@ async fn create_pod(channel: Channel, name: &str, cpu_millis: u64) {
         .unwrap();
 }
 
-async fn pods(channel: Channel) -> Vec<pb::Pod> {
+async fn pods(channel: Connection) -> Vec<pb::Pod> {
     PodServiceClient::new(channel)
         .list_pods(pb::ListPodsRequest::default())
         .await
@@ -77,7 +77,7 @@ fn node_of(pod: &pb::Pod) -> &str {
 }
 
 /// Waits until `count` pods are bound, returns every pod.
-async fn wait_bound(channel: Channel, count: usize) -> Vec<pb::Pod> {
+async fn wait_bound(channel: Connection, count: usize) -> Vec<pb::Pod> {
     let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
     loop {
         let pods = pods(channel.clone()).await;
@@ -92,7 +92,7 @@ async fn wait_bound(channel: Channel, count: usize) -> Vec<pb::Pod> {
     }
 }
 
-fn start_ikebana(channel: Channel, candidate: &str) -> (CancellationToken, JoinHandle<()>) {
+fn start_ikebana(channel: Connection, candidate: &str) -> (CancellationToken, JoinHandle<()>) {
     let shutdown = CancellationToken::new();
     let task = tokio::spawn(ikebana::run(channel, candidate.into(), shutdown.clone()));
     (shutdown, task)
@@ -157,7 +157,7 @@ async fn fails_over_to_another_instance() {
 
     create_pod(channel.clone(), "before", 100).await;
     wait_bound(channel.clone(), 1).await;
-    let leader = |channel: Channel| async move {
+    let leader = |channel: Connection| async move {
         LeadershipServiceClient::new(channel)
             .get_leader(pb::GetLeaderRequest {
                 election: "ikebana".into(),

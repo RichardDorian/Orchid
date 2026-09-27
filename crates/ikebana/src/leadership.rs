@@ -8,11 +8,11 @@ use std::time::Duration;
 use orchid_api::proto::duration_from_proto;
 use orchid_proto::v1 as pb;
 use orchid_proto::v1::leadership_service_client::LeadershipServiceClient;
+use orchid_transport::client::Connection;
 use tokio::sync::{mpsc, watch};
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tonic::Code;
-use tonic::transport::Channel;
 use tracing::{info, warn};
 
 pub const ELECTION: &str = "ikebana";
@@ -23,7 +23,7 @@ const FOLLOWER_RECHECK: Duration = Duration::from_secs(10);
 /// Campaigns until `shutdown` is cancelled. A message on `stale` means Labellum
 /// rejected the token: the leadership is considered lost.
 pub async fn run(
-    channel: Channel,
+    channel: Connection,
     candidate: String,
     leader: watch::Sender<Option<i64>>,
     mut stale: mpsc::Receiver<()>,
@@ -78,7 +78,7 @@ pub async fn run(
 
 /// Renews the leadership every third of its TTL, until it is lost.
 async fn lead(
-    client: &mut LeadershipServiceClient<Channel>,
+    client: &mut LeadershipServiceClient<Connection>,
     token: i64,
     ttl: Duration,
     stale: &mut mpsc::Receiver<()>,
@@ -114,7 +114,7 @@ async fn lead(
 }
 
 /// Waits until the leader key is deleted, or for a while.
-async fn follow(client: &mut LeadershipServiceClient<Channel>, shutdown: &CancellationToken) {
+async fn follow(client: &mut LeadershipServiceClient<Connection>, shutdown: &CancellationToken) {
     let wait = async {
         let current = client
             .get_leader(pb::GetLeaderRequest {

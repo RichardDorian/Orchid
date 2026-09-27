@@ -7,12 +7,12 @@
 pub mod informer;
 
 use orchid_transport::TransportError;
+use orchid_transport::client::Connection;
 use orchid_transport::tls::TlsMaterial;
-use tonic::transport::Channel;
 
 /// A channel to the Labellum instances reachable at `urls`, in mTLS mode if
 /// `tls` is set.
-pub fn connect(urls: &[String], tls: Option<&TlsMaterial>) -> Result<Channel, TransportError> {
+pub fn connect(urls: &[String], tls: Option<&TlsMaterial>) -> Result<Connection, TransportError> {
     let urls = orchid_transport::url::parse_server_urls(urls, tls.is_some())?;
     orchid_transport::client::connect(&urls, tls)
 }

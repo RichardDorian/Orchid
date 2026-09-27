@@ -5,9 +5,9 @@ use std::time::Duration;
 
 use orchid_api::ClusterConfig;
 use orchid_store::{MemoryStore, Store, codec, keys};
+use orchid_transport::client::Connection;
 use orchid_transport::server::{self, Listener};
 use orchid_transport::tls::TlsMaterial;
-use tonic::transport::Channel;
 
 use crate::{Labellum, Options};
 
@@ -80,7 +80,7 @@ impl<S: Store + Clone> TestServer<S> {
     }
 
     /// A channel to the server, presenting `tls` in mTLS mode.
-    pub fn channel(&self, tls: Option<&TlsMaterial>) -> Channel {
+    pub fn channel(&self, tls: Option<&TlsMaterial>) -> Connection {
         let urls = orchid_transport::url::parse_server_urls(&[self.url()], tls.is_some())
             .expect("valid URL");
         orchid_transport::client::connect(&urls, tls).expect("valid channel")
