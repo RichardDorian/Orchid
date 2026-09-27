@@ -19,7 +19,9 @@ use tokio::sync::Mutex;
 static LOCK: Mutex<()> = Mutex::const_new(());
 
 async fn store() -> Option<EtcdStore> {
-    let endpoints = std::env::var("ORCHID_TEST_ETCD").ok()?;
+    let endpoints = std::env::var("ORCHID_TEST_ETCD")
+        .ok()
+        .filter(|e| !e.is_empty())?;
     let endpoints: Vec<&str> = endpoints.split(',').collect();
     Some(
         EtcdStore::connect(&endpoints, None)
