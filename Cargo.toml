@@ -8,15 +8,18 @@ version = "0.1.0"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
+labellum = { path = "crates/labellum" }
 orchid-api = { path = "crates/orchid-api" }
 orchid-client = { path = "crates/orchid-client" }
 orchid-proto = { path = "crates/orchid-proto" }
 orchid-store = { path = "crates/orchid-store" }
 orchid-transport = { path = "crates/orchid-transport" }
 
+clap = { version = "4", features = ["derive"] }
 etcd-client = { version = "0.20", features = ["tls"] }
 futures-core = "0.3"
 futures-util = "0.3"
+gethostname = "1"
 humantime = "2"
 hyper-util = { version = "0.1", features = ["tokio"] }
 ipnet = { version = "2", features = ["serde"] }
@@ -30,10 +33,14 @@ tempfile = "3"
 thiserror = "2"
 tokio = "1"
 tokio-stream = "0.1"
+tokio-util = "0.7"
+toml = "1"
 tonic = { version = "0.14", features = ["tls-ring"] }
 tonic-prost = "0.14"
 tonic-prost-build = "0.14"
 tonic-types = "0.14"
 tower = { version = "0.5", features = ["util"] }
 tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1", features = ["v7"] }
 x509-parser = "0.18"
