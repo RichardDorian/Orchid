@@ -22,6 +22,11 @@ runtimes = ["io.containerd.runc.v2", "io.containerd.kata.v2", "io.containerd.run
 
 # Path to the containerd socket
 containerd = "/run/containerd/containerd.sock"
+# Image of the pod sandboxes, owning the namespaces shared by the containers of a pod.
+# Optional, defaults to "registry.k8s.io/pause:3.10".
+# pause_image = "registry.k8s.io/pause:3.10"
+# Directory of the container logs. Optional, defaults to "/var/log/orchid".
+# log_dir = "/var/log/orchid"
 
 # URLs of Labellum instances. Keiki fails over to the next one on errors.
 # `http://` in cleartext mode, `https://` in mTLS mode, `unix://` in both.
