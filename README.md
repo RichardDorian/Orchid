@@ -7,6 +7,8 @@ Orchid has three components:
 - **Ikebana**: the scheduler, places pods on nodes.
 - **Keiki**: the node agent, runs pods with containerd.
 
+`orchidctl` is the command line client.
+
 ## Crates
 
 | Crate | Description |
@@ -14,6 +16,7 @@ Orchid has three components:
 | [`labellum`](crates/labellum) | The API server: stores the desired state in etcd and runs the controller. |
 | [`ikebana`](crates/ikebana) | The scheduler: binds pending pods to the least loaded nodes. |
 | [`keiki`](crates/keiki) | The node agent: runs the pods bound to its node with containerd. |
+| [`orchidctl`](crates/orchidctl) | The command line client, modeled after `kubectl`. |
 | [`orchid-proto`](crates/orchid-proto) | gRPC protocol definitions and generated clients and servers. |
 | [`orchid-api`](crates/orchid-api) | Domain types shared by every component: resources, quantities, validation and protobuf conversions. |
 | [`orchid-store`](crates/orchid-store) | Storage layer of Labellum: a key-value store abstraction over etcd, with an in-memory implementation for tests. |
