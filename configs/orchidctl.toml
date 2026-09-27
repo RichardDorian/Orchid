@@ -1,0 +1,14 @@
+# Configuration of orchidctl, the command line client.
+# Default location: ~/.config/orchid/orchidctl.toml (override with --config or ORCHID_CONFIG).
+# Without configuration, orchidctl talks to http://127.0.0.1:36116.
+
+# URLs of the Labellum instances. `--server` overrides them.
+# `http://` in cleartext mode, `https://` in mTLS mode, `unix://` in both.
+labellum = ["https://10.0.0.1:36116", "https://10.0.0.2:36116"]
+
+# Presence of this section enables mTLS mode.
+# The certificate CN must be `user:<username>`.
+[tls]
+certificate = "/home/alice/.config/orchid/alice.crt"
+private_key = "/home/alice/.config/orchid/alice.key"
+ca = "/home/alice/.config/orchid/ca.crt"
