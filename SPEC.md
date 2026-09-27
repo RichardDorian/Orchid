@@ -51,7 +51,7 @@ In mTLS mode the identity of a caller is the Common Name (CN) of its client cert
 | Keiki              | `keiki:<node-name>`  |
 | Users (CLI, ...)   | `user:<username>`    |
 
-The server certificate of Labellum must have Subject Alternative Names (DNS names and/or IP addresses) covering every address clients use to reach it (node IPs, internal load balancer). The CN is not used to verify servers (rustls only checks SANs).
+The server certificate of Labellum must have Subject Alternative Names (DNS names and/or IP addresses) covering every address clients use to reach it (node IPs, internal load balancer). The CN is not used to verify servers (rustls only checks SANs). Over a unix socket, clients check the server certificate against `localhost`: the certificate needs a `localhost` SAN.
 
 ### Authorization
 
@@ -184,13 +184,14 @@ Every watchable collection (pods, nodes, cluster configuration, leader keys) exp
 
 Rules:
 - A client always starts with a `List`, then `Watch` from the returned revision.
+- `from_revision` is the last revision the client has seen: the stream contains the events after it.
 - When the stream breaks, the client reconnects (to any Labellum instance) and resumes from the last revision it has seen.
 - Labellum periodically sends `BOOKMARK` events carrying the current revision, so idle watchers can resume from a recent revision.
-- If `from_revision` has been compacted in etcd, Labellum fails the stream with `OUT_OF_RANGE`. The client must `List` again and reconcile.
+- If the events after `from_revision` are not available anymore, Labellum fails the call or the stream with `OUT_OF_RANGE`. The client must `List` again and reconcile.
 - Watches can be filtered (for example pods bound to a node, or unbound pods). An object that stops matching the filter is sent as `DELETED` (for example a pod rescheduled away from a node).
   Labellum uses the previous value of the keys (etcd `prev_kv`) to detect this.
 
-Each Labellum instance serves watches using its own etcd watch, so no state is shared between instances.
+Each Labellum instance keeps an in-memory cache of pods and nodes, fed by its own etcd watch, so no state is shared between instances. The cache assembles objects from their keys and keeps a bounded history of object events (with the object before and after each event), which serves watches and evaluates filters. Lists wait until the cache has reached the current etcd revision, so they see every write committed before them. A watch from a revision older than the history of the instance fails with `OUT_OF_RANGE`.
 
 #### Node registration and heartbeats
 
@@ -217,12 +218,13 @@ When it becomes leader, the controller lists all objects before watching them, s
 
 Responsibilities:
 
-- **Lost nodes**: when a node lease key disappears, the controller waits `pod_eviction_delay` (the timer restarts on leader failover, which is conservative). If the node is still unreachable, for each pod bound to it:
-  1. sets `phase = failed`, `reason = "NodeLost"`,
-  2. unless the pod restart policy is `never`, reschedules it: in a single transaction, clears the binding `node` (keeping `attempt`), subtracts its resources from the node `allocated` key and sets `phase = pending`, `pending_since = now`. The next binding increments `attempt`.
+- **Lost nodes**: when a node lease key disappears, the controller waits `pod_eviction_delay` (the timer restarts on leader failover, which is conservative). If the node is still unreachable, each pod bound to it is released in a single transaction that clears the binding `node` (keeping `attempt`) and subtracts its resources from the node `allocated` key:
+  - pods with the restart policy `never` get `phase = failed`, `reason = "NodeLost"`,
+  - other pods are rescheduled: `phase = pending`, `reason = "NodeLost"`, `pending_since = now`. The next binding increments `attempt`,
+  - pods that already `succeeded` or `failed` keep their status.
 
   Pods in the `terminating` phase are finalized instead of being rescheduled.
-- **Draining**: when a node has `draining = true`, the controller sets every pod bound to it to `terminating` with `reason = "Evicted"`. When Keiki finalizes an evicted pod, the controller reschedules it (evictions are not failures, the restart policy is ignored). When no pod is bound to the node anymore, the controller sets `draining = false` and `schedulable = false`: the node stays cordoned.
+- **Draining**: when a node has `draining = true`, the controller sets every pod bound to it to `terminating` with `reason = "Evicted"`. When Keiki finalizes an evicted pod, `FinalizePod` reschedules it in the same transaction (evictions are not failures, the restart policy is ignored). When no pod is bound to the node anymore, the controller sets `draining = false` and `schedulable = false`: the node stays cordoned.
 - **Deleted nodes**: pods are handled like for a lost node, without waiting for `pod_eviction_delay`.
 - **Allocation resync**: periodically recomputes every node `allocated` key from the bindings and fixes any drift.
 
@@ -240,7 +242,9 @@ Ikebana binds a pod with `Bind(pod, pod_revision, node, leader_token)`. Labellum
 
 If only the node keys changed, Labellum reads them again and retries. `Bind` fails with:
 - `RESOURCE_EXHAUSTED` if the pod doesn't fit on the node anymore,
-- `ABORTED` if the pod changed, is already bound, or the leader token is stale.
+- `ABORTED` if the pod changed, is already bound, the leader token is stale, or the node is not available anymore (unreachable, unhealthy, unschedulable, draining, or without the pod runtime).
+
+Failures carry a `google.rpc.ErrorInfo` detail (domain `orchid.io`) whose reason is a `BindFailure` value, so Ikebana can tell them apart. On success, `Bind` returns the binding and the revision of the transaction, which is the new `allocated_revision` of the node.
 
 Every node therefore sees its `allocated` updates serialized: two concurrent binds can never overcommit a node, whatever the state of the schedulers' caches.
 
@@ -264,11 +268,11 @@ A leader that fails to renew its leadership stops scheduling immediately. Follow
 
 Ikebana watches nodes and unbound pods and keeps them in memory. Each node entry holds its info, spec, condition and `allocated`.
 
-After a successful `Bind`, the pod resources are added to the cached `allocated` of the node until the watch delivers an `allocated` revision at least as recent as the one returned by `Bind` ("assumed pods"). This avoids stale caches producing bind conflicts.
+After a successful `Bind`, the pod resources are added to the cached `allocated` of the node until the watch delivers a node whose `allocated_revision` is at least the revision returned by `Bind` ("assumed pods"). This avoids stale caches producing bind conflicts.
 
 #### Queue
 
-Unbound pods (not `terminating`) are added to the active queue. A scheduler only schedules a single pod at a time. It takes the pod with the highest priority. If multiple pods have the same priority it takes the one with the oldest `pending_since` (stored in the pod, so the order survives a leader failover).
+Unbound pods in the `pending` phase are added to the active queue. A scheduler only schedules a single pod at a time. It takes the pod with the highest priority. If multiple pods have the same priority it takes the one with the oldest `pending_since` (stored in the pod, so the order survives a leader failover).
 
 When a pod cannot be placed on any node, it moves to the unschedulable queue so it doesn't block the queue. Pods move back from the unschedulable queue to the active queue when:
 - a node is added, becomes ready, becomes schedulable, or its `allocated` or capacity changes,
@@ -293,6 +297,8 @@ Then call `Bind`:
 Keiki is the agent that runs on nodes. It does not expose a gRPC server yet: it only connects to Labellum.
 Port `36117` is reserved for a future Keiki server (logs, exec).
 
+Each pod gets a sandbox container (pause image) owning the network, IPC and UTS namespaces of the pod, which its containers join. Containers live in the `orchid` containerd namespace and are labelled with the uid, attempt and name of their pod. Images already present are not pulled again. Pods only have a loopback network until CNI support is added.
+
 #### Lifecycle
 
 1. Connect to one of the configured Labellum URLs, fail over to the next one on errors.
@@ -309,7 +315,7 @@ Containers and sandboxes created by Keiki are labelled in containerd with the po
 
 #### Status reporting
 
-Keiki reports pod status with `UpdatePodStatus(uid, attempt, status)` and finalizes deleted pods with `FinalizePod(uid, attempt)`.
+Keiki reports pod status with `UpdatePodStatus(pod, uid, attempt, status)` and finalizes deleted pods with `FinalizePod(pod, uid, attempt)`. The pod name locates the pod, the uid checks it is the same pod.
 Labellum rejects both (`FAILED_PRECONDITION`) if the pod is not bound to this node with this attempt, so a node coming back from a partition cannot overwrite the status of a rescheduled pod.
 
 The health reported in heartbeats is `unhealthy` when Keiki cannot reach containerd. Unhealthy nodes are not schedulable but their pods are not rescheduled.
