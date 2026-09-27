@@ -19,6 +19,7 @@ struct Inner {
     starts: BTreeMap<(String, String), u32>,
     healthy_error: Option<String>,
     create_error: Option<String>,
+    creation_attempts: u32,
 }
 
 impl FakeRuntime {
@@ -59,6 +60,11 @@ impl FakeRuntime {
             .unwrap_or(0)
     }
 
+    /// How many times a pod creation was attempted.
+    pub fn creation_attempts(&self) -> u32 {
+        self.lock().creation_attempts
+    }
+
     /// Makes pod creations fail with `message`, or succeed again with `None`.
     pub fn fail_creations(&self, message: Option<&str>) {
         self.lock().create_error = message.map(str::to_owned);
@@ -93,6 +99,7 @@ impl Runtime for FakeRuntime {
 
     async fn create_pod(&self, pod: &Pod, attempt: u32) -> Result<(), RuntimeError> {
         let mut inner = self.lock();
+        inner.creation_attempts += 1;
         if let Some(message) = &inner.create_error {
             return Err(RuntimeError::Failed(message.clone()));
         }

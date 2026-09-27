@@ -289,6 +289,15 @@ async fn reports_creation_failures() {
     .await;
     assert!(pod.status.unwrap().message.contains("image not found"));
 
+    // Our own status reports must not shorten the backoff (200ms, then
+    // 400ms, 800ms...): a hot loop would make dozens of attempts.
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    let attempts = harness.runtime.creation_attempts();
+    assert!(
+        attempts <= 5,
+        "{attempts} creation attempts in about 2 seconds"
+    );
+
     harness.runtime.fail_creations(None);
     harness.wait_phase("my-app", pb::PodPhase::Running).await;
 }

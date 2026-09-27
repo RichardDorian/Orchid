@@ -34,6 +34,9 @@ pub struct Worker<R> {
     initial_backoff: Duration,
     /// Delay before retrying a failed creation.
     create_backoff: Duration,
+    /// No creation is attempted before this instant. Wakeups caused by our own
+    /// status reports must not shorten the backoff.
+    create_after: Option<Instant>,
     last_report: Option<pb::UpdatePodStatusRequest>,
 }
 
@@ -52,6 +55,7 @@ impl<R: Runtime> Worker<R> {
             containers: HashMap::new(),
             initial_backoff,
             create_backoff: initial_backoff,
+            create_after: None,
             last_report: None,
         }
     }
@@ -73,9 +77,12 @@ impl<R: Runtime> Worker<R> {
                 return;
             }
 
+            let now = Instant::now();
             let wait = if self.created {
                 self.supervise(&pod).await;
                 POLL_INTERVAL
+            } else if let Some(after) = self.create_after.filter(|after| now < *after) {
+                after - now
             } else {
                 match self.create(&pod).await {
                     Ok(()) => Duration::ZERO,
@@ -90,6 +97,7 @@ impl<R: Runtime> Worker<R> {
                         )
                         .await;
                         let wait = self.create_backoff;
+                        self.create_after = Some(Instant::now() + wait);
                         self.create_backoff = (self.create_backoff * 2).min(MAX_BACKOFF);
                         wait
                     }
@@ -108,14 +116,17 @@ impl<R: Runtime> Worker<R> {
     }
 
     async fn create(&mut self, pod: &Pod) -> Result<(), RuntimeError> {
-        self.report(
-            pod,
-            PodPhase::Creating,
-            "Creating",
-            String::new(),
-            Vec::new(),
-        )
-        .await;
+        // After a failure, the failure stays visible until the next attempt succeeds.
+        if self.create_after.is_none() {
+            self.report(
+                pod,
+                PodPhase::Creating,
+                "Creating",
+                String::new(),
+                Vec::new(),
+            )
+            .await;
+        }
         info!(
             pod = pod.name,
             attempt = self.reference.attempt,
@@ -131,6 +142,7 @@ impl<R: Runtime> Worker<R> {
         }
         self.created = true;
         self.create_backoff = self.initial_backoff;
+        self.create_after = None;
         Ok(())
     }
 
