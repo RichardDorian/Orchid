@@ -1,0 +1,26 @@
+[package]
+name = "orchidctl"
+description = "Command line client of Orchid"
+readme = "README.md"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+clap = { workspace = true, features = ["env"] }
+humantime.workspace = true
+jiff.workspace = true
+orchid-api.workspace = true
+orchid-client.workspace = true
+orchid-proto.workspace = true
+orchid-transport.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "time"] }
+toml.workspace = true
+tonic.workspace = true
+
+[dev-dependencies]
+labellum = { workspace = true, features = ["testing"] }
+orchid-transport = { workspace = true, features = ["testing"] }
+tempfile.workspace = true

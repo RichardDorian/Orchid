@@ -1119,6 +1119,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "orchidctl"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "humantime",
+ "jiff",
+ "labellum",
+ "orchid-api",
+ "orchid-client",
+ "orchid-proto",
+ "orchid-transport",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "toml",
+ "tonic",
+]
+
+[[package]]
 name = "pem"
 version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
