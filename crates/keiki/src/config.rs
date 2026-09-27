@@ -39,6 +39,10 @@ pub struct Config {
     pub runtimes: Vec<String>,
     /// Path of the containerd socket.
     pub containerd: PathBuf,
+    /// containerd namespace of the pods. Agents sharing a containerd must use
+    /// different namespaces.
+    #[serde(default = "default_namespace")]
+    pub containerd_namespace: String,
     /// Image of the pod sandboxes.
     #[serde(default = "default_pause_image")]
     pub pause_image: String,
@@ -50,6 +54,10 @@ pub struct Config {
     pub capacity: Resources,
     /// Presence enables mTLS mode.
     pub tls: Option<TlsConfig>,
+}
+
+fn default_namespace() -> String {
+    "orchid".to_owned()
 }
 
 fn default_pause_image() -> String {
@@ -96,6 +104,7 @@ impl Config {
 
     pub fn containerd_options(&self) -> ContainerdOptions {
         ContainerdOptions {
+            namespace: self.containerd_namespace.clone(),
             pause_image: self.pause_image.clone(),
             log_dir: self.log_dir.clone(),
             ..ContainerdOptions::new(self.containerd.clone())

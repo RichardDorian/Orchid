@@ -22,6 +22,9 @@ runtimes = ["io.containerd.runc.v2", "io.containerd.kata.v2", "io.containerd.run
 
 # Path to the containerd socket
 containerd = "/run/containerd/containerd.sock"
+# containerd namespace of the pods. Optional, defaults to "orchid".
+# Agents sharing a containerd must use different namespaces.
+# containerd_namespace = "orchid"
 # Image of the pod sandboxes, owning the namespaces shared by the containers of a pod.
 # Optional, defaults to "registry.k8s.io/pause:3.10".
 # pause_image = "registry.k8s.io/pause:3.10"

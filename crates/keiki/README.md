@@ -16,7 +16,7 @@ See [`configs/keiki.toml`](../../configs/keiki.toml) for the configuration file.
 
 ## containerd
 
-- Everything lives in the `orchid` containerd namespace. Containers are labelled with the uid, attempt and name of their pod.
+- Everything lives in the `orchid` containerd namespace (`containerd_namespace` in the configuration). Containers are labelled with the uid, attempt and name of their pod.
 - Every pod gets a sandbox container running the pause image, which owns the network, IPC and UTS namespaces of the pod. The containers of the pod join them.
 - Images are pulled with the transfer service and unpacked for the local platform. An image already present is not pulled again.
 - Container logs are written to `<log_dir>/<pod>_<uid>/<container>.log`.
