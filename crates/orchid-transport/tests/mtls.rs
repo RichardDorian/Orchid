@@ -135,3 +135,89 @@ async fn mtls_rejects_cleartext_clients() {
     let http = ServerUrl::Tcp(https.replace("https://", "http://"));
     assert!(who_am_i(&http, None).await.is_err());
 }
+
+#[tokio::test]
+async fn shutdown_closes_the_listener_and_open_streams() {
+    use std::time::{Duration, Instant};
+
+    use orchid_proto::v1::pod_service_client::PodServiceClient;
+    use orchid_proto::v1::pod_service_server::{PodService, PodServiceServer};
+
+    /// A pod service whose watches never end.
+    struct Endless;
+
+    #[tonic::async_trait]
+    impl PodService for Endless {
+        async fn create_pod(
+            &self,
+            _: Request<pb::CreatePodRequest>,
+        ) -> Result<Response<pb::Pod>, Status> {
+            Err(Status::unimplemented(""))
+        }
+        async fn get_pod(
+            &self,
+            _: Request<pb::GetPodRequest>,
+        ) -> Result<Response<pb::Pod>, Status> {
+            Err(Status::unimplemented(""))
+        }
+        async fn list_pods(
+            &self,
+            _: Request<pb::ListPodsRequest>,
+        ) -> Result<Response<pb::ListPodsResponse>, Status> {
+            Ok(Response::new(pb::ListPodsResponse::default()))
+        }
+        type WatchPodsStream = tokio_stream::Pending<Result<pb::PodEvent, Status>>;
+        async fn watch_pods(
+            &self,
+            _: Request<pb::WatchPodsRequest>,
+        ) -> Result<Response<Self::WatchPodsStream>, Status> {
+            Ok(Response::new(tokio_stream::pending()))
+        }
+        async fn delete_pod(
+            &self,
+            _: Request<pb::DeletePodRequest>,
+        ) -> Result<Response<pb::Pod>, Status> {
+            Err(Status::unimplemented(""))
+        }
+        async fn update_pod_priority(
+            &self,
+            _: Request<pb::UpdatePodPriorityRequest>,
+        ) -> Result<Response<pb::Pod>, Status> {
+            Err(Status::unimplemented(""))
+        }
+    }
+
+    let listener = Listener::bind(&tcp()).await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let router = server::builder(None)
+        .unwrap()
+        .add_service(PodServiceServer::new(Endless));
+    let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
+    let server = tokio::spawn(server::serve(router, vec![listener], async move {
+        let _ = stopped.await;
+    }));
+
+    let url = ServerUrl::Tcp(format!("http://127.0.0.1:{port}"));
+    let channel = orchid_transport::client::connect(std::slice::from_ref(&url), None).unwrap();
+    let _stream = PodServiceClient::new(channel)
+        .watch_pods(pb::WatchPodsRequest::default())
+        .await
+        .unwrap();
+
+    let started = Instant::now();
+    stop.send(()).unwrap();
+    // New connections are refused right away.
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert!(
+        tokio::net::TcpStream::connect(("127.0.0.1", port))
+            .await
+            .is_err()
+    );
+    // The server returns despite the open watch.
+    tokio::time::timeout(Duration::from_secs(10), server)
+        .await
+        .expect("server stopped")
+        .unwrap()
+        .unwrap();
+    assert!(started.elapsed() >= server::SHUTDOWN_GRACE);
+}

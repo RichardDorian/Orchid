@@ -11,6 +11,7 @@ license.workspace = true
 testing = ["dep:rcgen"]
 
 [dependencies]
+futures-core.workspace = true
 hyper-util.workspace = true
 rcgen = { workspace = true, optional = true }
 serde.workspace = true

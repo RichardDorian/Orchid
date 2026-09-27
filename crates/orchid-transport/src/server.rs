@@ -7,7 +7,7 @@ use tokio::net::{TcpListener, UnixListener};
 use tokio_stream::wrappers::{TcpListenerStream, UnixListenerStream};
 use tonic::transport::Server;
 use tonic::transport::server::Router;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::TransportError;
 use crate::tls::TlsMaterial;
@@ -66,46 +66,106 @@ impl Listener {
     }
 }
 
+/// How long in-flight requests get to finish after the shutdown signal.
+/// Watch streams never finish on their own: they are closed after it.
+pub const SHUTDOWN_GRACE: Duration = Duration::from_secs(5);
+
 /// Serves `router` on every listener until `shutdown` completes.
+///
+/// On shutdown, the listeners are closed right away (new connections are
+/// refused, so clients fail over to another instance), in-flight requests get
+/// [`SHUTDOWN_GRACE`] to finish, then the remaining connections are closed.
 pub async fn serve(
     router: Router,
     listeners: Vec<Listener>,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> Result<(), TransportError> {
-    let (stop, stopped) = tokio::sync::watch::channel(());
+    let (stop, stopped) = tokio::sync::watch::channel(false);
+    let signal = |mut stopped: tokio::sync::watch::Receiver<bool>| async move {
+        let _ = stopped.wait_for(|stopped| *stopped).await;
+    };
+
     let mut tasks = tokio::task::JoinSet::new();
     for listener in listeners {
         let router = router.clone();
-        let mut stopped = stopped.clone();
-        let signal = async move {
-            let _ = stopped.changed().await;
-        };
         match listener {
             Listener::Tcp(listener) => {
                 info!(address = ?listener.local_addr().ok(), "listening");
-                tasks.spawn(
-                    router.serve_with_incoming_shutdown(TcpListenerStream::new(listener), signal),
-                );
+                let incoming =
+                    Closing::new(TcpListenerStream::new(listener), signal(stopped.clone()));
+                tasks.spawn(router.serve_with_incoming_shutdown(incoming, signal(stopped.clone())));
             }
             Listener::Unix(listener) => {
                 info!(address = ?listener.local_addr().ok(), "listening");
-                tasks.spawn(
-                    router.serve_with_incoming_shutdown(UnixListenerStream::new(listener), signal),
-                );
+                let incoming =
+                    Closing::new(UnixListenerStream::new(listener), signal(stopped.clone()));
+                tasks.spawn(router.serve_with_incoming_shutdown(incoming, signal(stopped.clone())));
             }
         }
     }
     tokio::spawn(async move {
         shutdown.await;
-        let _ = stop.send(());
+        let _ = stop.send(true);
     });
 
-    while let Some(result) = tasks.join_next().await {
-        match result {
-            Ok(result) => result?,
-            Err(error) if error.is_panic() => std::panic::resume_unwind(error.into_panic()),
-            Err(_) => {}
+    let deadline = async {
+        signal(stopped.clone()).await;
+        tokio::time::sleep(SHUTDOWN_GRACE).await;
+    };
+    tokio::pin!(deadline);
+    loop {
+        tokio::select! {
+            result = tasks.join_next() => match result {
+                None => return Ok(()),
+                Some(Ok(result)) => result?,
+                Some(Err(error)) if error.is_panic() => std::panic::resume_unwind(error.into_panic()),
+                Some(Err(_)) => {}
+            },
+            () = &mut deadline => {
+                warn!("closing the remaining connections");
+                tasks.abort_all();
+                return Ok(());
+            }
         }
     }
-    Ok(())
+}
+
+/// A stream of connections whose listener is dropped as soon as `stop`
+/// completes, even if the server doesn't poll the stream anymore (tonic keeps
+/// its incoming stream alive while waiting for the open connections).
+struct Closing<S> {
+    listener: std::sync::Arc<std::sync::Mutex<Option<S>>>,
+}
+
+impl<S: Send + 'static> Closing<S> {
+    fn new(listener: S, stop: impl Future<Output = ()> + Send + 'static) -> Self {
+        let listener = std::sync::Arc::new(std::sync::Mutex::new(Some(listener)));
+        let closed = listener.clone();
+        tokio::spawn(async move {
+            stop.await;
+            closed
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .take();
+        });
+        Self { listener }
+    }
+}
+
+impl<S: futures_core::Stream + Unpin> futures_core::Stream for Closing<S> {
+    type Item = S::Item;
+
+    fn poll_next(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        let mut listener = self
+            .listener
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        match listener.as_mut() {
+            Some(listener) => std::pin::Pin::new(listener).poll_next(cx),
+            None => std::task::Poll::Ready(None),
+        }
+    }
 }
