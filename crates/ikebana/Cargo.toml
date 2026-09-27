@@ -1,0 +1,27 @@
+[package]
+name = "ikebana"
+description = "Scheduler of Orchid: places pending pods on nodes"
+readme = "README.md"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+clap.workspace = true
+gethostname.workspace = true
+jiff.workspace = true
+orchid-api.workspace = true
+orchid-client.workspace = true
+orchid-proto.workspace = true
+orchid-transport.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "signal", "sync", "time"] }
+tokio-util.workspace = true
+toml.workspace = true
+tonic.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+labellum = { workspace = true, features = ["testing"] }

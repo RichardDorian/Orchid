@@ -8,6 +8,7 @@ version = "0.1.0"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
+ikebana = { path = "crates/ikebana" }
 labellum = { path = "crates/labellum" }
 orchid-api = { path = "crates/orchid-api" }
 orchid-client = { path = "crates/orchid-client" }
