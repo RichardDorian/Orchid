@@ -253,7 +253,7 @@ impl ContainerdRuntime {
             hostname: &pod.name,
             image: &config,
             resources,
-            cgroups_path: format!("/orchid/{}/{container}", pod.uid),
+            cgroups_path: cgroups_path(&self.options.namespace, &pod.uid, attempt, container),
         });
         let labels = HashMap::from([
             (LABEL_UID.to_owned(), pod.uid.clone()),
@@ -588,6 +588,13 @@ impl Runtime for ContainerdRuntime {
     }
 }
 
+/// The cgroup of a container. Distinct per attempt: the containers of a
+/// previous attempt may still exist when the pod runs again on the same host,
+/// and per containerd namespace, for agents sharing a host.
+fn cgroups_path(namespace: &str, uid: &str, attempt: u32, container: &str) -> String {
+    format!("/{namespace}/{uid}/{attempt}/{container}")
+}
+
 /// A containerd container ID: short, and unique per pod, attempt and container.
 fn container_id(uid: &str, attempt: u32, container: &str) -> String {
     let digest = Sha256::digest(format!("{uid}/{attempt}/{container}"));
@@ -622,6 +629,19 @@ mod tests {
         assert_ne!(a, b);
         assert!(a.len() <= 76, "containerd limit");
         assert!(a.starts_with("orchid-"));
+    }
+
+    #[test]
+    fn cgroups_are_distinct_per_attempt_and_namespace() {
+        assert_eq!(cgroups_path("orchid", "uid", 1, "app"), "/orchid/uid/1/app");
+        assert_ne!(
+            cgroups_path("orchid", "uid", 1, "app"),
+            cgroups_path("orchid", "uid", 2, "app")
+        );
+        assert_ne!(
+            cgroups_path("a", "uid", 1, "app"),
+            cgroups_path("b", "uid", 1, "app")
+        );
     }
 
     #[test]
