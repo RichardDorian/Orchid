@@ -200,6 +200,23 @@ impl<S: Store> Controller<S> {
                 return Ok(());
             }
 
+            // A finished pod must not run again: it is unbound and keeps its
+            // status, the node removes its sandbox as a pod not bound to it.
+            if raw.status.value.phase.is_terminal() {
+                let extra = vec![
+                    self.fence.clone(),
+                    unchanged(keys::node::spec(node), Some(&raw_node.spec)),
+                ];
+                if ops::release(store, &raw, Release::Unbind, extra).await? {
+                    info!(
+                        pod = raw.name,
+                        node, "unbound finished pod of a draining node"
+                    );
+                    return Ok(());
+                }
+                continue;
+            }
+
             let status = PodStatus {
                 phase: PodPhase::Terminating,
                 reason: "Evicted".to_owned(),

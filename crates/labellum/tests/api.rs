@@ -489,3 +489,54 @@ async fn leadership_is_exclusive() {
         .unwrap_err();
     assert_eq!(error.code(), Code::PermissionDenied);
 }
+
+#[tokio::test]
+async fn draining_does_not_run_finished_pods_again() {
+    let cluster = Cluster::start().await;
+    let _heartbeats = ready_node(&cluster, "phoenix", "10.244.0.0/24", 1000).await;
+    let token = leader_token(&cluster).await;
+    let pod = create_pod(&cluster, "job", 300).await;
+    bind(&cluster, "job", "phoenix", token).await.unwrap();
+    cluster
+        .agent()
+        .update_pod_status(pb::UpdatePodStatusRequest {
+            pod: "job".into(),
+            uid: pod.uid,
+            attempt: 1,
+            phase: pb::PodPhase::Succeeded.into(),
+            reason: "Completed".into(),
+            message: String::new(),
+            containers: Vec::new(),
+        })
+        .await
+        .unwrap();
+
+    cluster
+        .nodes()
+        .update_node_spec(pb::UpdateNodeSpecRequest {
+            name: "phoenix".into(),
+            draining: Some(true),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    let pod = eventually(|| async {
+        let pod = get_pod(&cluster, "job").await.unwrap();
+        node_of(&pod).is_empty().then_some(pod)
+    })
+    .await;
+    assert_eq!(
+        phase(&pod),
+        pb::PodPhase::Succeeded,
+        "the pod keeps its status"
+    );
+    let spec = eventually(|| async {
+        let spec = get_node(&cluster, "phoenix").await.spec.unwrap();
+        (!spec.draining).then_some(spec)
+    })
+    .await;
+    assert!(!spec.schedulable);
+    let node = get_node(&cluster, "phoenix").await;
+    assert_eq!(node.status.unwrap().allocated.unwrap().cpu_millis, 0);
+}
