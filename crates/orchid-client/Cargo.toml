@@ -1,0 +1,20 @@
+[package]
+name = "orchid-client"
+description = "Client side helpers of the Orchid API: connections and informers"
+readme = "README.md"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+futures-core.workspace = true
+futures-util.workspace = true
+orchid-api.workspace = true
+orchid-proto.workspace = true
+orchid-transport.workspace = true
+tokio = { workspace = true, features = ["sync", "time", "macros"] }
+tonic.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["sync", "time", "macros", "rt", "test-util"] }

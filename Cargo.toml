@@ -9,6 +9,7 @@ license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
 orchid-api = { path = "crates/orchid-api" }
+orchid-client = { path = "crates/orchid-client" }
 orchid-proto = { path = "crates/orchid-proto" }
 orchid-store = { path = "crates/orchid-store" }
 orchid-transport = { path = "crates/orchid-transport" }
