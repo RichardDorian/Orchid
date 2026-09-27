@@ -1,0 +1,30 @@
+[package]
+name = "orchid-transport"
+description = "gRPC transport shared by the Orchid services: URLs, cleartext or mTLS connections, identities and error details"
+readme = "README.md"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[features]
+# Generation of test certificates.
+testing = ["dep:rcgen"]
+
+[dependencies]
+hyper-util.workspace = true
+rcgen = { workspace = true, optional = true }
+serde.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["net", "fs"] }
+tokio-stream = { workspace = true, features = ["net"] }
+tonic.workspace = true
+tonic-types.workspace = true
+tower.workspace = true
+tracing.workspace = true
+x509-parser.workspace = true
+
+[dev-dependencies]
+orchid-proto.workspace = true
+orchid-transport = { path = ".", features = ["testing"] }
+tempfile.workspace = true
+tokio = { workspace = true, features = ["net", "fs", "macros", "rt-multi-thread"] }

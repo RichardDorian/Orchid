@@ -11,19 +11,28 @@ license = "MIT OR Apache-2.0"
 orchid-api = { path = "crates/orchid-api" }
 orchid-proto = { path = "crates/orchid-proto" }
 orchid-store = { path = "crates/orchid-store" }
+orchid-transport = { path = "crates/orchid-transport" }
 
 etcd-client = { version = "0.20", features = ["tls"] }
 futures-core = "0.3"
 futures-util = "0.3"
 humantime = "2"
+hyper-util = { version = "0.1", features = ["tokio"] }
 ipnet = { version = "2", features = ["serde"] }
 jiff = { version = "0.2", features = ["serde"] }
 prost = "0.14"
 prost-types = "0.14"
+rcgen = "0.14"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+tempfile = "3"
 thiserror = "2"
 tokio = "1"
-tonic = "0.14"
+tokio-stream = "0.1"
+tonic = { version = "0.14", features = ["tls-ring"] }
 tonic-prost = "0.14"
 tonic-prost-build = "0.14"
+tonic-types = "0.14"
+tower = { version = "0.5", features = ["util"] }
+tracing = "0.1"
+x509-parser = "0.18"
